@@ -29,7 +29,8 @@ bool init(int window_scale);
 
 // Native "open file" dialog for the disc image; returns "" if cancelled.
 std::string pick_disc_image(const std::string &title);
-void message_box(const std::string &title, const std::string &text);
+void message_box(const std::string &title, const std::string &text);  // an error
+void info_box(const std::string &title, const std::string &text);
 void shutdown();
 
 // Processes window/input events; exits the process when the window is closed.

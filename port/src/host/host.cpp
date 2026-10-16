@@ -23,13 +23,41 @@ int g_device_frames;  // device buffer, in AUDIO_RATE frames
 SDL_Gamepad *g_pads[2];
 bool g_screenshot_key;
 
+// Player number on the pad itself: DualSense player LEDs, DualShock 4 / DualSense light bar colour.
+void show_player(int port) {
+    if (!g_pads[port]) return;
+    SDL_SetGamepadPlayerIndex(g_pads[port], port);
+    const char *type = SDL_GetGamepadStringForType(SDL_GetGamepadType(g_pads[port]));
+    LOGI("Gamepad on controller port %d: %s (%s)", port + 1, SDL_GetGamepadName(g_pads[port]),
+         type ? type : "unknown");
+}
+
 void open_gamepad(SDL_JoystickID id) {
+    for (SDL_Gamepad *slot : g_pads)
+        if (slot && SDL_GetGamepadID(slot) == id) return;
+    for (int port = 0; port < 2; port++) {
+        if (g_pads[port]) continue;
+        g_pads[port] = SDL_OpenGamepad(id);
+        if (g_pads[port])
+            show_player(port);
+        else
+            LOGW("Could not open gamepad %u: %s", unsigned(id), SDL_GetError());
+        return;
+    }
+}
+
+void close_gamepad(SDL_JoystickID id) {
     for (SDL_Gamepad *&slot : g_pads) {
-        if (!slot) {
-            slot = SDL_OpenGamepad(id);
-            if (slot) LOGI("Gamepad connected: %s", SDL_GetGamepadName(slot));
-            return;
+        if (slot && SDL_GetGamepadID(slot) == id) {
+            LOGI("Gamepad disconnected: %s", SDL_GetGamepadName(slot));
+            SDL_CloseGamepad(slot);
+            slot = nullptr;
         }
+    }
+    // The game is played on port 1: a pad left on port 2 moves up.
+    if (!g_pads[0] && g_pads[1]) {
+        std::swap(g_pads[0], g_pads[1]);
+        show_player(0);
     }
 }
 
@@ -49,6 +77,11 @@ std::string user_dir() {
 }
 
 bool init(int window_scale) {
+    // DualShock 4 and DualSense through SDL's own drivers (USB and Bluetooth): every button including
+    // the touchpad click, and the light bar / player LEDs.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_PLAYER_LED, "1");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         LOGE("SDL_Init failed: %s", SDL_GetError());
         return false;
@@ -120,6 +153,10 @@ void message_box(const std::string &title, const std::string &text) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title.c_str(), text.c_str(), g_window);
 }
 
+void info_box(const std::string &title, const std::string &text) {
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, title.c_str(), text.c_str(), g_window);
+}
+
 void shutdown() {
     if (g_audio) SDL_DestroyAudioStream(g_audio);
     if (g_gl) SDL_GL_DestroyContext(g_gl);
@@ -139,12 +176,7 @@ void poll_events() {
             open_gamepad(e.gdevice.which);
             break;
         case SDL_EVENT_GAMEPAD_REMOVED:
-            for (SDL_Gamepad *&slot : g_pads) {
-                if (slot && SDL_GetGamepadID(slot) == e.gdevice.which) {
-                    SDL_CloseGamepad(slot);
-                    slot = nullptr;
-                }
-            }
+            close_gamepad(e.gdevice.which);
             break;
         case SDL_EVENT_KEY_DOWN:
             if (e.key.scancode == SDL_SCANCODE_F12) g_screenshot_key = true;

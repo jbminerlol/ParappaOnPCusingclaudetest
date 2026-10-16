@@ -65,10 +65,12 @@ and use LOAD in the MENU screen. Memory card slot 1 is the folder `memcard\bu00`
 COOL unlocks the bonus stage, KT & the Sunny Funny Band, as the seventh entry of STAGE SELECT.
 
 Security software can stop programs from creating files in some folders (Trend Micro Folder Shield
-kills them). The port checks the game folder once, with a short-lived copy of itself, and if that
-copy is stopped the saves go to `%APPDATA%\PaRappaPort\memcard\bu00` instead (the log says so).
-To check again, for example after allowing `parappa.exe` in the security software, delete the
-`saves_checked_for` line from `settings.ini`.
+kills them). The port checks the game folder once, with a short-lived copy of itself; if that copy
+is stopped, the saves go to `%APPDATA%\PaRappaPort\memcard\bu00` instead, and the game says so once
+in a message box. To check again after allowing `parappa.exe` in the security software, delete the
+`saves_checked_for` line from `settings.ini`: the saves then go next to the exe, and the ones made
+so far are copied there. `Open Saves Folder.bat` (copied next to the exe by the build) opens
+whichever folder holds the saves.
 
 ### Settings
 
@@ -79,17 +81,28 @@ for example with wireless headphones, set `audio_offset_ms` to the extra delay (
 
 ### Controls
 
-Bindings live in `controls.ini`, created with the defaults below on first run in
-`%APPDATA%\PaRappaPort\` (or pass `--controls <file>`). Each PS1 button takes a comma-separated
-list of SDL key names (`[keyboard]`) and gamepad buttons or axes (`[gamepad]`, e.g. `a`, `dpup`,
-`lefttrigger`, `leftx-`); delete the file to restore the defaults.
+A DualShock 4 or DualSense plays like the original controller: every button maps to the same
+button (USB or Bluetooth, no extra drivers). The pad's light bar and player LEDs show its controller
+port. Other gamepads (Xbox and so on) map by position. A second pad is controller port 2; if the
+first one is unplugged, the other takes over port 1.
 
-| PS1 | Keyboard | Gamepad |
-|---|---|---|
-| D-pad | Arrow keys | D-pad |
-| △ ○ × □ | W D S A | Y B A X (north / east / south / west) |
-| L1 R1 / L2 R2 | Q E / 1 3 | Shoulders / triggers |
-| Start / Select | Enter / Right Shift, Backspace | Start / Back |
+| PS1 | DualShock 4 / DualSense | Xbox-style pad | Keyboard |
+|---|---|---|---|
+| D-pad | D-pad or left stick | D-pad or left stick | Arrow keys |
+| △ ○ × □ | △ ○ × □ | Y B A X | W D S A |
+| L1 R1 / L2 R2 | L1 R1 / L2 R2 | LB RB / LT RT | Q E / 1 3 |
+| Start | Options | Menu | Enter |
+| Select | Share / Create or touchpad click | View | Right Shift, Backspace |
+
+Bindings live in `controls.ini`, created with these defaults on first run in
+`%APPDATA%\PaRappaPort\` (or pass `--controls <file>`). Each PS1 button takes a comma-separated
+list of SDL key names (`[keyboard]`) and gamepad inputs (`[gamepad]`: `cross`, `circle`,
+`square`, `triangle`, `l1`...`r3`, `options`, `share`, `touchpad`, `dpup`, `leftx-`, ... or
+SDL names); delete the file to restore the defaults. A `controls.ini` written by an older version
+of the port is replaced with the new defaults (the old one is kept as `controls.old.ini`).
+
+If Steam or DS4Windows is running, it may turn the pad into a virtual Xbox controller; that still
+works, mapped by position.
 
 F11 toggles fullscreen, F12 saves a screenshot.
 

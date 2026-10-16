@@ -53,6 +53,7 @@ target_compile_options(parappa PRIVATE -Wall -Wno-unused-function -fno-strict-al
 target_link_options(parappa PRIVATE -Wl,--large-address-aware -static-libgcc -static-libstdc++)
 
 
-# SDL3.dll next to the exe.
+# SDL3.dll and the saves-folder shortcut next to the exe.
 add_custom_command(TARGET parappa POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3::SDL3-shared> $<TARGET_FILE_DIR:parappa>)
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3::SDL3-shared>
+        "${CMAKE_SOURCE_DIR}/res/Open Saves Folder.bat" $<TARGET_FILE_DIR:parappa>)

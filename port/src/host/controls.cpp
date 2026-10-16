@@ -21,22 +21,40 @@ struct Button {
     const char *gamepad;  // default gamepad binding (SDL gamepad button / axis names)
 };
 
+// Gamepad defaults use PlayStation names: a DualShock 4 / DualSense maps button for button
+// (Options = Start; Share / Create or a touchpad click = Select). Other pads map by position.
 const Button kButtons[] = {
-    {"up", host::PAD_UP, "Up", "dpup"},
-    {"down", host::PAD_DOWN, "Down", "dpdown"},
-    {"left", host::PAD_LEFT, "Left", "dpleft"},
-    {"right", host::PAD_RIGHT, "Right", "dpright"},
-    {"triangle", host::PAD_TRIANGLE, "W", "y"},
-    {"circle", host::PAD_CIRCLE, "D", "b"},
-    {"cross", host::PAD_CROSS, "S", "a"},
-    {"square", host::PAD_SQUARE, "A", "x"},
-    {"l1", host::PAD_L1, "Q", "leftshoulder"},
-    {"r1", host::PAD_R1, "E", "rightshoulder"},
-    {"l2", host::PAD_L2, "1", "lefttrigger"},
-    {"r2", host::PAD_R2, "3", "righttrigger"},
-    {"start", host::PAD_START, "Return", "start"},
-    {"select", host::PAD_SELECT, "Right Shift, Backspace", "back"},
+    {"up", host::PAD_UP, "Up", "dpup, lefty-"},
+    {"down", host::PAD_DOWN, "Down", "dpdown, lefty+"},
+    {"left", host::PAD_LEFT, "Left", "dpleft, leftx-"},
+    {"right", host::PAD_RIGHT, "Right", "dpright, leftx+"},
+    {"triangle", host::PAD_TRIANGLE, "W", "triangle"},
+    {"circle", host::PAD_CIRCLE, "D", "circle"},
+    {"cross", host::PAD_CROSS, "S", "cross"},
+    {"square", host::PAD_SQUARE, "A", "square"},
+    {"l1", host::PAD_L1, "Q", "l1"},
+    {"r1", host::PAD_R1, "E", "r1"},
+    {"l2", host::PAD_L2, "1", "l2"},
+    {"r2", host::PAD_R2, "3", "r2"},
+    {"start", host::PAD_START, "Return", "options"},
+    {"select", host::PAD_SELECT, "Right Shift, Backspace", "share, touchpad"},
 };
+
+// PlayStation names for gamepad inputs -> SDL names. SDL reports face buttons by position, and on
+// PlayStation pads south is cross, east circle, west square and north triangle.
+const struct {
+    const char *name, *sdl;
+} kPadAliases[] = {
+    {"cross", "a"}, {"circle", "b"}, {"square", "x"}, {"triangle", "y"},
+    {"l1", "leftshoulder"}, {"r1", "rightshoulder"}, {"l2", "lefttrigger"}, {"r2", "righttrigger"},
+    {"l3", "leftstick"}, {"r3", "rightstick"}, {"options", "start"}, {"share", "back"},
+    {"create", "back"}, {"select", "back"}, {"ps", "guide"}, {"mute", "misc1"},
+};
+
+// First line of the controls.ini this version writes. A file starting with an older port's header
+// holds that port's defaults, so it is replaced (and kept as controls.old.ini).
+const char kHeader[] = "# PaRappa the Rapper port: controller bindings (v2).";
+const char kOldHeader[] = "# PaRappa the Rapper port: controller bindings.";
 
 struct KeyBinding {
     SDL_Scancode key;
@@ -68,13 +86,15 @@ void write_defaults(const std::string &path) {
         LOGW("Could not create %s", path.c_str());
         return;
     }
-    f << "# PaRappa the Rapper port: controller bindings.\n"
+    f << kHeader << "\n"
          "# Each PS1 button takes a comma-separated list of names.\n"
          "#  [keyboard]  SDL key names, e.g. A, Space, Left Shift, Keypad 8\n"
          "#              (https://wiki.libsdl.org/SDL3/SDL_Scancode)\n"
-         "#  [gamepad]   a b x y back start leftshoulder rightshoulder dpup dpdown dpleft dpright\n"
-         "#              leftstick rightstick, or an axis: lefttrigger righttrigger leftx- leftx+\n"
-         "#              lefty- lefty+ rightx- rightx+ righty- righty+\n"
+         "#  [gamepad]   cross circle square triangle l1 r1 l2 r2 l3 r3 options share touchpad ps mute\n"
+         "#              dpup dpdown dpleft dpright, a stick direction: leftx- leftx+ lefty- lefty+\n"
+         "#              rightx- rightx+ righty- righty+, or SDL names (a b x y back start ...).\n"
+         "#              DualShock 4 / DualSense buttons match by name (Create on a DualSense is\n"
+         "#              share); other pads by position (cross = bottom face button).\n"
          "# Delete this file to restore the defaults.\n\n[keyboard]\n";
     for (const Button &b : kButtons) f << b.name << " = " << b.keys << "\n";
     f << "\n[gamepad]\n";
@@ -97,6 +117,8 @@ void bind_pad(std::string name, uint16_t bit) {
         dir = name.back() == '-' ? -1 : 1;
         name.pop_back();
     }
+    for (const auto &a : kPadAliases)
+        if (name == a.name) name = a.sdl;
     b.button = SDL_GetGamepadButtonFromString(name.c_str());
     if (b.button == SDL_GAMEPAD_BUTTON_INVALID) {
         b.axis = SDL_GetGamepadAxisFromString(name.c_str());
@@ -117,11 +139,21 @@ std::string default_path() {
 
 void load(const std::string &path) {
     std::ifstream probe(path);
-    if (!probe) {
+    std::string first;
+    bool exists = bool(probe) && (std::getline(probe, first), true);
+    probe.close();
+    if (exists && trim(first) == kOldHeader) {
+        std::string old = path.substr(0, path.rfind('.')) + ".old.ini";
+        std::remove(old.c_str());
+        if (std::rename(path.c_str(), old.c_str()) == 0) {
+            LOGI("Controls file from an older version kept as %s", old.c_str());
+            exists = false;
+        }
+    }
+    if (!exists) {
         write_defaults(path);
         LOGI("Wrote default controls to %s", path.c_str());
     }
-    probe.close();
     std::ifstream f(path);
     g_keys.clear();
     g_pad.clear();

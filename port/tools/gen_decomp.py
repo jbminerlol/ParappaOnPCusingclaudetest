@@ -204,15 +204,19 @@ NARROW_CAST = rf'\*\({NARROW_TYPE} \*\)\((?:[^()]|\([^()]*\))*\)|\({NARROW_TYPE}
 NUM_LIT = r'(?:0x[0-9a-fA-F]+|\d+)'
 
 
-def fix_narrow_range_checks(body):
-    """MIPS range checks "sltiu (x - K), M" come out as "x - K < M"; with x a narrow unsigned
-    type C promotes it to a signed int and x < K passes the test. Compare as unsigned instead."""
-    narrow_vars = re.findall(rf'^\s*{NARROW_TYPE} (\w+);', body, re.M)
+def fix_narrow_range_checks(body, narrow_globals=()):
+    """MIPS range checks "sltiu (x - K), M" come out as "x - K < M", or as "M < x - K" for the
+    opposite test; with x a narrow unsigned type (a local, a cast or a global of this function) C
+    promotes it to a signed int and x < K flips the result. Compare as unsigned instead."""
+    names = set(re.findall(rf'^\s*{NARROW_TYPE} (\w+);', body, re.M)) | set(narrow_globals)
     left = NARROW_CAST
-    if narrow_vars:
-        left += '|\\b(?:' + '|'.join(sorted(map(re.escape, narrow_vars), key=len, reverse=True)) + ')\\b'
-    return re.sub(rf'({left}) - ({NUM_LIT}) (<=?|>=?) ({NUM_LIT})',
+    if names:
+        left += '|\\b(?:' + '|'.join(sorted(map(re.escape, names), key=len, reverse=True)) + ')\\b'
+    body = re.sub(rf'({left}) - ({NUM_LIT}) (<=?|>=?) ({NUM_LIT})',
                   lambda m: f'(uint)({m.group(1)} - {m.group(2)}) {m.group(3)} {m.group(4)}', body)
+    # Mirrored form, only as a whole operand: "(1 < mode - 1)", "&& 5 < x - 0x31)".
+    return re.sub(rf'(?:(?<=\()|(?<=[,=&|?:] ))({NUM_LIT}) (<=?|>=?) ({left}) - ({NUM_LIT})(?=\s*(?:\)|;|&&|\|\||,|\?))',
+                  lambda m: f'{m.group(1)} {m.group(2)} (uint)({m.group(3)} - {m.group(4)})', body)
 
 
 class Generator:
@@ -279,7 +283,9 @@ class Generator:
             # can reach 32, meaning an empty mask; x86 masks the count to 0 and keeps every bit.
             body = UNALIGNED_MASK.sub(
                 lambda m: f'{"PSX_SHL" if m.group(2) == "<<" else "PSX_SHR"}({m.group(1)}, {m.group(3)})', body)
-            body = fix_narrow_range_checks(body)
+            body = fix_narrow_range_checks(body, [
+                n for n, info in prog.func_globals.get(addr, {}).items()
+                if re.fullmatch(NARROW_TYPE, info[1]) and info[2] == info[3]])
             # Upper bytes of a bool/char result ("CONCAT31(extraout_var, b)") are 0 on the MIPS (the
             # callee's sltu/andi sets the whole register); uninitialised in C they are stack garbage.
             body = re.sub(r'^(\s+[A-Za-z_][\w ]*?\**\s*)((?:extraout|in)_\w+);$', r'\1\2 = 0;', body, flags=re.M)

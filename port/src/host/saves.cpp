@@ -61,12 +61,32 @@ int write_test(const char *dir_utf8) {
     return kWriteTestOk;
 }
 
+namespace {
+
+// Saves made in the user folder while the game folder was blocked move along once it is allowed.
+void copy_saves(const fs::path &from, const fs::path &to) {
+    std::error_code ec;
+    if (!fs::is_directory(from, ec)) return;
+    if (fs::exists(to, ec) && !fs::is_empty(to, ec)) return;  // the game folder has its own saves
+    int n = 0;
+    for (const fs::directory_entry &e : fs::directory_iterator(from, ec)) {
+        if (!e.is_regular_file(ec)) continue;
+        fs::create_directories(to, ec);
+        if (fs::copy_file(e.path(), to / e.path().filename(), fs::copy_options::skip_existing, ec)) n++;
+    }
+    if (n) LOGI("Copied %d save(s) from %s", n, utf8_string(from).c_str());
+}
+
+}  // namespace
+
 fs::path choose_save_dir() {
     const char *base = SDL_GetBasePath();
     fs::path exe_dir = utf8_path(base ? base : ".");
     fs::path next_to_exe = exe_dir / "memcard" / "bu00";
     fs::path fallback = utf8_path(user_dir()) / "memcard" / "bu00";
     std::string key = utf8_string(exe_dir);
+    // Checked once per game folder: each failed check is a write the security software blocks, and
+    // repeated ones can get the program itself quarantined.
     bool ok;
     if (settings::get("saves_checked_for") == key) {
         ok = settings::get("saves_next_to_exe") == "1";
@@ -75,10 +95,27 @@ fs::path choose_save_dir() {
         settings::set("saves_checked_for", key);
         settings::set("saves_next_to_exe", ok ? "1" : "0");
     }
-    if (!ok)
-        LOGW("Saves cannot be written next to the executable (blocked, e.g. by security software); using %s",
-             utf8_string(fallback).c_str());
-    return ok ? next_to_exe : fallback;
+    if (ok) {
+        copy_saves(fallback, next_to_exe);
+        return next_to_exe;
+    }
+    LOGW("Saves cannot be written next to the executable (blocked, e.g. by security software); using %s",
+         utf8_string(fallback).c_str());
+    // Tell the player once per game folder, so an empty memcard folder there is not taken for lost saves.
+    if (settings::get("saves_notice_for") != key && !SDL_getenv("PARAPPA_AUTOINPUT")) {
+        settings::set("saves_notice_for", key);
+        info_box("PaRappa the Rapper - saves",
+                 "Your saves are kept in:\n" + utf8_string(fallback) +
+                     "\n\nSecurity software on this PC (for example Trend Micro Folder Shield) does not let "
+                     "parappa.exe create files in the game folder, so the saves cannot go to the memcard "
+                     "folder next to parappa.exe. Saving and loading work as usual.\n\n"
+                     "To keep the saves in the game folder instead, allow parappa.exe in the security "
+                     "software and delete the line starting with saves_checked_for from\n" +
+                     utf8_string(utf8_path(user_dir()) / "settings.ini") +
+                     "\nYour saves are then copied there automatically.\n\n"
+                     "\"Open Saves Folder.bat\" in the game folder opens the folder with your saves.");
+    }
+    return fallback;
 }
 
 }  // namespace host
