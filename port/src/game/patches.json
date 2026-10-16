@@ -1,0 +1,14 @@
+[
+  {
+    "function": "FUN_80014614",
+    "note": "jalr at 800148e0 passes a1 = the animation/button index (Ghidra dropped it; Parappa's reaction to a press)",
+    "old": "(*DAT_80094430)(param_1);",
+    "new": "(*DAT_80094430)(param_1,*(int *)(pbVar14 + 8));"
+  },
+  {
+    "function": "FUN_80015d18",
+    "note": "jalr at 80015e90 passes a0 = the stage index to the stage init function",
+    "old": "(*(code *)(&PTR_DAT_80048d28)[local_20 * 3])();",
+    "new": "(*(code *)(&PTR_DAT_80048d28)[local_20 * 3])(local_20);"
+  }
+]

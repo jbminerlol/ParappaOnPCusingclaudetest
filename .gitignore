@@ -1,0 +1,29 @@
+# Build output
+/build/
+
+# Toolchains (download them yourself, see README.md)
+/tools/
+/ghidra_*/
+/jdk-*/
+
+# Game data and everything made from it: never commit these
+/game/
+/analysis/*
+!/analysis/README.md
+/project/
+/settings/
+*.bin
+*.BIN
+*.cue
+*.CUE
+*.iso
+*.img
+*.chd
+port/res/*.ico
+
+# Run output
+memcard/
+*.log
+shot_*.png
+replay_*.txt
+__pycache__/
